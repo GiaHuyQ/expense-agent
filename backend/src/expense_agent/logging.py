@@ -13,4 +13,4 @@ def setup_logging(level: str = "INFO") -> None:
     logging.getLogger("httpcore").setLevel(logging.WARNING)
     logging.getLogger("openai").setLevel(logging.WARNING)
 
-logger = setup_logging()
+logger = logging.getLogger("expense_agent")
