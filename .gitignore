@@ -4,3 +4,25 @@
 
 # LangGraph
 .langgraph_api/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# Data
+backend/data/*.db
+backend/data/*.db-*
+
+# Env
+.env
+**/.env
+!.env.example
+!**/.env.example
+
+# Node / Next.js
+agent-chat-ui/node_modules/
+agent-chat-ui/.next/
+
+# OS
+.DS_Store
