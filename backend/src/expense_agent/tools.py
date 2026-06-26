@@ -1,30 +1,40 @@
 from typing import cast
-from .memory import get_user_profile
-from .logging import logger, setup_logging
+from .memory import save_user_profile
+from .logging_config import logger
 
 from langchain.tools import tool, ToolRuntime
 from langgraph.store.sqlite import SqliteStore
 
-setup_logging()
+@tool
+def save_user_info(runtime: ToolRuntime, name: str, first_onboard: bool = False) -> str:
+    """Save or update the core user profile information in the long-term store.
 
-@tool()
-def get_user_info(runtime: ToolRuntime) -> str:
-    """ 
-        Get user info: name, first_onboard and all information
+    Args:
+        runtime: The global ToolRuntime context containing the storage layer.
+        name: The preferred name/nickname of the user.
+        first_onboard: Boolean flag indicating if onboarding is pending (True) or finished (False).
     """
+    logger.info(f"save_user_info_called | name='{name}' | first_onboard={first_onboard}")
+
     if not runtime.store:
-        logger.warning("get_user_info_called | store is not initialized")
-        return "Not any user info"
+        logger.warning("save_user_info_failed | store is not initialized")
+        return "ERROR: Storage layer is not available."
 
     store = cast(SqliteStore, runtime.store)
 
-    profile = get_user_profile(store)
+    # Formulate the fields to be updated dynamic and securely
+    update_data = {}
+    if name is not None:
+        update_data["name"] = name
 
-    logger.info(f"get_user_info_called | profile={profile}")
+    if first_onboard is not None:
+        update_data["first_onboard"] = first_onboard
 
-    if not profile:
-        return "Not any user info"
+    if not update_data:
+        return "INFO: No profile updates were provided."
+
+    # Invoke the long-term persistence layer to merge fields safely
+    save_user_profile(store, **update_data)
     
-    first_onboard = profile.get("first_onboard", False)
-
-    return f"first_onboard={first_onboard}."
+    logger.info("save_user_info_success | profile updated in long-term store")
+    return f"SUCCESS: User profile has been updated successfully with: {update_data}"
