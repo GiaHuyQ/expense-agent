@@ -1,40 +1,46 @@
-from typing import cast
+from typing import cast, Any
 from .memory import save_user_profile
 from .logging_config import logger
 
 from langchain.tools import tool, ToolRuntime
-from langgraph.store.sqlite import SqliteStore
+from langgraph.store.sqlite.aio import AsyncSqliteStore
 
 @tool
-def save_user_info(runtime: ToolRuntime, name: str, first_onboard: bool = False) -> str:
-    """Save or update the core user profile information in the long-term store.
+async def save_user_info(runtime: ToolRuntime, name: str, first_onboard: bool = False) -> dict[str, Any]:
+    """Save the user profile.
 
     Args:
-        runtime: The global ToolRuntime context containing the storage layer.
-        name: The preferred name/nickname of the user.
-        first_onboard: Boolean flag indicating if onboarding is pending (True) or finished (False).
+        name: User name.
+        first_onboard: Onboarding status.
     """
-    logger.info(f"save_user_info_called | name='{name}' | first_onboard={first_onboard}")
+    logger.info(
+        "save_user_info_called | name=%s | first_onboard=%s",
+        name,
+        first_onboard
+    )
 
-    if not runtime.store:
+    if runtime.store is None:
         logger.warning("save_user_info_failed | store is not initialized")
-        return "ERROR: Storage layer is not available."
+        return {"status": "error"}
 
-    store = cast(SqliteStore, runtime.store)
+    store = cast(AsyncSqliteStore, runtime.store)
 
     # Formulate the fields to be updated dynamic and securely
-    update_data = {}
-    if name is not None:
-        update_data["name"] = name
-
-    if first_onboard is not None:
-        update_data["first_onboard"] = first_onboard
-
-    if not update_data:
-        return "INFO: No profile updates were provided."
+    update_data = {
+        "name": name,
+        "first_onboard": first_onboard,
+    }
 
     # Invoke the long-term persistence layer to merge fields safely
-    save_user_profile(store, **update_data)
+    await save_user_profile(store, **update_data)
     
-    logger.info("save_user_info_success | profile updated in long-term store")
-    return f"SUCCESS: User profile has been updated successfully with: {update_data}"
+    logger.info(
+        "save_user_info_success | name=%s | first_onboard=%s",
+        name,
+        first_onboard,
+    )
+
+    return {
+        "status": "success",
+        "user_profile": update_data
+    }
