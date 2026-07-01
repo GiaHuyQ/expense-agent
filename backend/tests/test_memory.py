@@ -1,92 +1,111 @@
-"""Automation tests for the agent's memory persistence layers using real physical files."""
-
 import os
 import shutil
 import sys
 import unittest
 
-from langgraph.checkpoint.sqlite import SqliteSaver
-from langgraph.store.sqlite import SqliteStore
-
-# Dynamic path configuration to allow importing from the 'src' directory
+# Cho phép import từ thư mục project
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
+from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
+from langgraph.store.sqlite.aio import AsyncSqliteStore
+
 from src.expense_agent import memory
+from src.expense_agent.memory import (
+    create_checkpointer,
+    create_store,
+    get_user_profile,
+    save_user_profile,
+)
 
 
-class TestAgentMemory(unittest.TestCase):
-    """Test suite for short-term (Checkpointer) and long-term (Store) memory layers."""
+class TestAgentMemory(unittest.IsolatedAsyncioTestCase):
+    """Tests for LangGraph checkpoint and store."""
 
-    def setUp(self) -> None:
-        """Run automatically before each test. Creates an isolated test directory."""
+    async def asyncSetUp(self):
         self.test_dir = "./test_memory"
         os.makedirs(self.test_dir, exist_ok=True)
 
-        # Redirect the application's data path to our test directory
         memory.settings.DATA_DIR = self.test_dir
 
-    def tearDown(self) -> None:
-        """Run automatically after each test. Closes connections and wipes test files."""
-        # 1. Safely exit Context Managers to release SQLite file locks on disk
-        if memory._checkpointer_conn is not None:
-            memory._checkpointer_conn.__exit__(None, None, None)
-        if memory._store_conn is not None:
-            memory._store_conn.__exit__(None, None, None)
+        self.checkpointer = await create_checkpointer()
+        self.store = await create_store()
 
-        # 2. Reset global Singleton instances to ensure strict isolation between tests
-        memory._checkpointer_conn = None
-        memory._checkpointer_instance = None
-        memory._store_conn = None
-        memory._store_instance = None
+    async def asyncTearDown(self):
+        await self.checkpointer.manager.__aexit__(None, None, None)
+        await self.store.manager.__aexit__(None, None, None)
 
-        # 3. Permanently delete the temporary test folder and all active WAL files
-        if os.path.exists(self.test_dir):
-            shutil.rmtree(self.test_dir)
+        shutil.rmtree(self.test_dir, ignore_errors=True)
 
-    def test_checkpoint_singleton_and_file_creation(self):
-        """Verify that get_checkpointer creates a physical file and acts as a Singleton."""
-        checkpointer1 = memory.get_checkpointer()
-        checkpointer2 = memory.get_checkpointer()
+    async def test_checkpointer_created(self):
+        """Verify AsyncSqliteSaver is created correctly."""
 
-        # Check if the returned object is valid and the database file exists
-        self.assertIsInstance(checkpointer1, SqliteSaver)
-        self.assertTrue(os.path.exists(f"{self.test_dir}/checkpoints.db"))
+        self.assertIsInstance(
+            self.checkpointer.checkpointer,
+            AsyncSqliteSaver,
+        )
 
-        # Assert that both variables point to the exact same memory address
-        self.assertIs(checkpointer1, checkpointer2)
+        self.assertTrue(
+            os.path.exists(
+                os.path.join(self.test_dir, "checkpoints.db")
+            )
+        )
 
-    def test_store_singleton_and_file_creation(self):
-        """Verify that get_store creates a physical file and acts as a Singleton."""
-        store1 = memory.get_store()
-        store2 = memory.get_store()
+    async def test_store_created(self):
+        """Verify AsyncSqliteStore is created correctly."""
 
-        # Check if the returned object is valid and the database file exists
-        self.assertIsInstance(store1, SqliteStore)
-        self.assertTrue(os.path.exists(f"{self.test_dir}/store.db"))
+        self.assertIsInstance(
+            self.store.store,
+            AsyncSqliteStore,
+        )
 
-        # Assert that both variables point to the exact same memory address
-        self.assertIs(store1, store2)
+        self.assertTrue(
+            os.path.exists(
+                os.path.join(self.test_dir, "store.db")
+            )
+        )
 
-    def test_user_profile_lifecycle(self):
-        """Test reading, initial saving, and multi-field merging within the Long-term Store."""
-        store = memory.get_store()
+    async def test_user_profile_lifecycle(self):
+        """Verify saving and updating user profile."""
 
-        # 1. Initial State: Should return an empty dict if no profile exists yet
-        initial_profile = memory.get_user_profile(store)
-        self.assertEqual(initial_profile, {})
+        # Empty profile
+        profile = await get_user_profile(self.store.store)
+        self.assertEqual(profile, {})
 
-        # 2. First Save: Insert base fields into the user profile
-        memory.save_user_profile(store, name="User_123", first_onboard=True)
-        profile_after_save = memory.get_user_profile(store)
-        self.assertEqual(profile_after_save, {"name": "User_123", "first_onboard": True})
+        # First save
+        await save_user_profile(
+            self.store.store,
+            name="Huy",
+            first_onboard=True,
+        )
 
-        # 3. Merge/Update: Add new fields and update existing ones without data loss
-        memory.save_user_profile(store, age=29, first_onboard=False)
-        final_profile = memory.get_user_profile(store)
+        profile = await get_user_profile(self.store.store)
 
-        # Verify that 'name' is preserved, 'first_onboard' is updated, and 'age' is appended
-        expected_profile = {"name": "User_123", "first_onboard": False, "age": 29}
-        self.assertEqual(final_profile, expected_profile)
+        self.assertEqual(
+            profile,
+            {
+                "name": "Huy",
+                "first_onboard": True,
+            },
+        )
+
+        # Merge update
+        await save_user_profile(
+            self.store.store,
+            age=28,
+            first_onboard=False,
+        )
+
+        profile = await get_user_profile(self.store.store)
+
+        self.assertEqual(
+            profile,
+            {
+                "name": "Huy",
+                "first_onboard": False,
+                "age": 28,
+            },
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

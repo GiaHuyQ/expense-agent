@@ -1,89 +1,117 @@
-"""Automation tests for the database module (db.py) using the unittest framework."""
-
 import os
-import sys
 import shutil
-import sqlite3
-
 import unittest
-from unittest.mock import patch
 
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+from ..src.expense_agent.db import create_database
+from ..src.expense_agent import db as db_module
 
-from src.expense_agent import db
+class TestDatabaseSystem(unittest.IsolatedAsyncioTestCase):
+    """
+    Full async test suite for ExpenseDB (aiosqlite-based).
+    """
 
-
-class TestDatabaseSystem(unittest.TestCase):
-    """Test suite for validating database schema, constraints, and views."""
-
-    def setUp(self) -> None:
-        """Run automatically before each test. Sets up an in-memory database."""
-        # Define a unique directory for testing to isolate from production data
+    async def asyncSetUp(self):
         self.test_dir = "./tests_data_env"
         os.makedirs(self.test_dir, exist_ok=True)
+        db_module.settings.DATA_DIR = self.test_dir
 
-        # Redirect the application's DATA_DIR to our test folder
-        db.settings.DATA_DIR = self.test_dir
+        self.db = await create_database()
+        self.conn = self.db.write_conn
 
-        # Initialize the connection (this creates the actual 'expense.db' file)
-        self.conn = db.get_connection()
+    async def asyncTearDown(self):
+        await self.db.write_conn.close()
+        await self.db.read_conn.close()
 
-    def tearDown(self) -> None:
-        # Explicitly close connection
-        self.conn.close()
+        shutil.rmtree(self.test_dir, ignore_errors=True)
 
-        # Delete the entire test directory and its contents
-        if os.path.exists(self.test_dir):
-            shutil.rmtree(self.test_dir)
+    async def test_database_initialization(self):
+        """Verify WAL mode and foreign keys are enabled."""
 
-    def test_database_initialization(self):
-        """Verify database connection object and PRAGMA configurations."""
-        # Check if the connection object is valid
-        self.assertIsInstance(self.conn, sqlite3.Connection)
+        cursor = await self.conn.execute("PRAGMA journal_mode;")
+        journal_mode = await cursor.fetchone()
 
-        # Fetch active SQLite configurations
-        wal_status = self.conn.execute("PRAGMA journal_mode;").fetchone()[0]
-        fk_status = self.conn.execute("PRAGMA foreign_keys;").fetchone()[0]
+        cursor = await self.conn.execute("PRAGMA foreign_keys;")
+        fk = await cursor.fetchone()
 
-        # Assert configurations are correct
-        self.assertEqual(wal_status, "wal")
-        self.assertEqual(fk_status, 1)
+        # normalize fetchone results which may be None
+        journal_mode_val = journal_mode[0].lower() if journal_mode and journal_mode[0] is not None else None
+        fk_val = fk[0] if fk and fk[0] is not None else None
 
-    def test_view_balance_calculation(self):
-        """Verify real-time current balance calculation in source_balance VIEW."""
-        # 1. Add sample data to test the view formula
-        self.conn.executescript("""
-            INSERT INTO category (category_name) 
+        self.assertEqual(journal_mode_val, "wal")
+        self.assertEqual(fk_val, 1)
+
+    async def test_foreign_key_constraint(self):
+        """Ensure invalid source_id is rejected."""
+
+        await self.conn.executescript("""
+            INSERT INTO category (category_name)
             VALUES ('Food');
-                                
+
             INSERT INTO source (source_name, initial_balance)
             VALUES ('Cash', 500000);
-                                
-            INSERT INTO transactions (date, amount, transaction_type, category_id, source_id) 
+        """)
+
+        with self.assertRaises(Exception):
+            await self.conn.execute("""
+                INSERT INTO transactions (
+                    transaction_date,
+                    amount,
+                    transaction_type,
+                    category_id,
+                    source_id
+                )
+                VALUES (
+                    '2026-06-25',
+                    10000,
+                    'expense',
+                    1,
+                    999
+                );
+            """)
+
+    async def test_view_balance_calculation(self):
+        """Verify source_balance view correctness."""
+
+        await self.conn.executescript("""
+            INSERT INTO category (category_name)
+            VALUES ('Food');
+
+            INSERT INTO source (source_name, initial_balance)
+            VALUES ('Cash', 500000);
+
+            INSERT INTO transactions (
+                transaction_date,
+                amount,
+                transaction_type,
+                category_id,
+                source_id
+            )
             VALUES ('2026-06-25', 200000, 'income', 1, 1);
-                                
-            INSERT INTO transactions (date, amount, transaction_type, category_id, source_id)
+
+            INSERT INTO transactions (
+                transaction_date,
+                amount,
+                transaction_type,
+                category_id,
+                source_id
+            )
             VALUES ('2026-06-25', 50000, 'expense', 1, 1);
         """)
 
-        # 2. Query the view (Expected balance: 500k + 200k - 50k = 650k)
-        row = self.conn.execute(
-            "SELECT current_balance FROM source_balance WHERE source_id = 1;"
-        ).fetchone()[0]
+        await self.conn.commit()
 
-        # Assert calculation accuracy
-        self.assertEqual(row, 650000)
+        cursor = await self.conn.execute("""
+            SELECT current_balance
+            FROM source_balance
+            WHERE source_id = 1;
+        """)
 
-    def test_foreign_key_constraint(self):
-        """Verify that foreign key constraints block invalid relational data."""
-        # Try to insert a transaction with a non-existent source_id (999)
-        # It must raise an IntegrityError due to PRAGMA foreign_keys = ON
-        with self.assertRaises(sqlite3.IntegrityError):
-            self.conn.execute("""
-                INSERT INTO transactions (date, amount, transaction_type, category_id, source_id)
-                VALUES ('2026-06-25', 10000, 'expense', 1, 999);
-            """)
+        row = await cursor.fetchone()
 
+        row_val = row[0] if row and row[0] is not None else None
+
+        # 500000 + 200000 - 50000 = 650000
+        self.assertEqual(row_val, 650000)
 
 if __name__ == "__main__":
     unittest.main()
