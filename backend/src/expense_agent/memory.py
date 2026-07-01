@@ -3,6 +3,7 @@ from contextlib import AbstractAsyncContextManager
 
 from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
 from langgraph.store.sqlite.aio import AsyncSqliteStore
+from langgraph.store.base import BaseStore
 
 from .config import settings
 
@@ -52,7 +53,7 @@ async def create_store() -> StoreResource:
     )
 
 
-async def get_user_profile(store: AsyncSqliteStore) -> dict[str, object]:
+async def get_user_profile(store: BaseStore) -> dict[str, object]:
     """Fetch the current user profile. Returns an empty dict if not found."""
     item = await store.aget(USER_PROFILE_NAMESPACE, USER_PROFILE_KEY)
 
@@ -62,7 +63,7 @@ async def get_user_profile(store: AsyncSqliteStore) -> dict[str, object]:
     return {}
 
 
-async def save_user_profile(store: AsyncSqliteStore, **fields) -> None:
+async def save_user_profile(store: BaseStore, **fields) -> None:
     """Merge and update the user profile with new fields."""
     # Get current profile data
     profile = await get_user_profile(store)
