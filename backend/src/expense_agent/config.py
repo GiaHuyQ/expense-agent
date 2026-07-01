@@ -9,6 +9,7 @@ class Settings(BaseSettings):
     )
 
     # --- OPENAI ----
+    BASE_URL: str = "https://api.openai.com/v1"
     OPENAI_API_KEY: SecretStr | None = None
     MODEL_NAME: str = "openai:gpt-4o-mini"
     
@@ -20,6 +21,5 @@ class Settings(BaseSettings):
     LANGSMITH_ENDPOINT: str = "https://api.smith.langchain.com"
     LANGSMITH_API_KEY: SecretStr | None = None
     LANGSMITH_PROJECT: str = "expense-agent"
-
 
 settings = Settings()
