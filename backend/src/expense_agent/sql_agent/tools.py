@@ -2,11 +2,9 @@ import aiosqlite
 from typing import Any
 from datetime import datetime
 
-from ..logging_config import logger
-from ..db import ExpenseDBResource
-
+from expense_agent.logging_config import logger
 from langchain.tools import tool
-
+from langchain_core.runnables import RunnableConfig
 
 @tool
 def get_db_dictionary() -> dict:
@@ -65,15 +63,22 @@ def get_db_dictionary() -> dict:
     return data_dictionary
 
 @tool
-async def execute_sql(query: str, db: ExpenseDBResource) -> dict[str, object]:
+async def execute_sql(query: str, config: RunnableConfig) -> dict[str, object]:
     """Execute a read-only SQL query.
 
     Args:
         query: SQL query.
     """
+    db = config.get("configurable", {}).get("db")
+
+    if not db:
+        logger.error("Database connection missing in config")
+        return {"status": "error", "message": "System error: DB not connected."}
+
     logger.info("execute_sql_called | query=%s", query)
 
     conn = db.read_conn
+
     try:
         cursor = await conn.execute(query)
 
@@ -97,12 +102,18 @@ async def execute_sql(query: str, db: ExpenseDBResource) -> dict[str, object]:
         return {"status": "error"}
     
 @tool
-async def add_category(category_name: str, db: ExpenseDBResource) -> dict[str, object]:
+async def add_category(category_name: str, config: RunnableConfig) -> dict[str, object]:
     """Create a category if it does not exist.
 
     Args:
         category_name: Category name.
     """
+    db = config.get("configurable", {}).get("db")
+
+    if not db:
+        logger.error("Database connection missing in config")
+        return {"status": "error", "message": "System error: DB not connected."}
+
     logger.info("add_category_called | category_name=%s", category_name)
 
     conn = db.write_conn
@@ -134,7 +145,7 @@ async def add_category(category_name: str, db: ExpenseDBResource) -> dict[str, o
 
 @tool
 async def add_money_source(
-        db: ExpenseDBResource,
+        config: RunnableConfig,
         source_name: str, 
         initial_balance: float = 0.0,
     ) -> dict[str, str]:
@@ -144,6 +155,12 @@ async def add_money_source(
         source_name: Money source name.
         initial_balance: Initial balance.
     """
+    db = config.get("configurable", {}).get("db")
+
+    if not db:
+        logger.error("Database connection missing in config")
+        return {"status": "error", "message": "System error: DB not connected."}
+
     logger.info(
         "add_money_source_called | source_name=%s | initial_balance=%s",
         source_name,
@@ -162,7 +179,7 @@ async def add_money_source(
         await conn.commit()
 
         logger.info(
-            "add_money_source_success | source_id=%s",
+            "add_money_source_success | source_name=%s",
             source_name,
         )
 
@@ -182,7 +199,7 @@ async def add_money_source(
 
 @tool
 async def add_transaction(
-    db: ExpenseDBResource,
+    config: RunnableConfig,
     transaction_date: str, 
     amount: float, 
     transaction_type: str, 
@@ -223,6 +240,12 @@ async def add_transaction(
                 "Expected format: YYYY-MM-DD."
             )
         }
+
+    db = config.get("configurable", {}).get("db")
+
+    if not db:
+        logger.error("Database connection missing in config")
+        return {"status": "error", "message": "System error: DB not connected."}
 
     logger.info(
         "add_transaction_called | date=%s | amount=%s | "
@@ -267,7 +290,7 @@ async def add_transaction(
 
 @tool
 async def update_transaction(
-    db: ExpenseDBResource,
+    config: RunnableConfig,
     transaction_id: int, 
     transaction_date: str | None = None, 
     amount: float | None = None, 
@@ -286,6 +309,12 @@ async def update_transaction(
         source_id: Optional new verified integer ID of the money source.
         note: Optional new description text for the transaction.
     """
+    db = config.get("configurable", {}).get("db")
+
+    if not db:
+        logger.error("Database connection missing in config")
+        return {"status": "error", "message": "System error: DB not connected."}
+
     logger.info("update_transaction_called | transaction_id=%s", transaction_id)
 
     conn = db.write_conn
@@ -395,7 +424,7 @@ async def update_transaction(
 
 @tool
 async def delete_transaction(
-    db: ExpenseDBResource,
+    config: RunnableConfig,
     transaction_id: int
 ) -> dict[str, Any]:
     """Delete an existing transaction permanently from the database by its ID.
@@ -403,7 +432,14 @@ async def delete_transaction(
     Args:
         transaction_id: The integer primary key ID of the transaction to be removed.
     """
+    db = config.get("configurable", {}).get("db")
+
+    if not db:
+        logger.error("Database connection missing in config")
+        return {"status": "error", "message": "System error: DB not connected."}
+
     logger.info("delete_transaction_called | transaction_id=%s", transaction_id)
+
     conn = db.write_conn
 
     try:
