@@ -21,7 +21,7 @@ async def create_database() -> ExpenseDBResource:
 
         # Configure SQLite
         await w_conn.execute("PRAGMA journal_mode=WAL;")
-        await w_conn.execute("PRAGMA foreign_keys = ON;")
+        await w_conn.execute("PRAGMA foreign_keys=ON;")
 
         # Create database schema
         await w_conn.executescript("""
@@ -39,7 +39,6 @@ async def create_database() -> ExpenseDBResource:
             CREATE TABLE IF NOT EXISTS transactions (
                 id INTEGER PRIMARY KEY,
                 transaction_date TEXT NOT NULL,
-                time TEXT NOT NULL,
                 amount REAL NOT NULL CHECK (amount > 0),
                 transaction_type TEXT NOT NULL CHECK (transaction_type IN ('expense', 'income')),
                 category_id INTEGER,
