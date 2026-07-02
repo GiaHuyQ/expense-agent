@@ -2,21 +2,18 @@ from typing import cast
 from dataclasses import dataclass
 from contextlib import asynccontextmanager
 
+from src.expense_agent.config import settings
+from src.expense_agent.agent import create_main_agent
+from src.expense_agent.db import ExpenseDBResource, create_database
+from src.expense_agent.logging_config import logger, setup_logging
+from src.expense_agent.memory import CheckpointerResource, StoreResource
+from src.expense_agent.services.chat_service import chat_stream
+
 from fastapi import Depends, FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
-
 from langgraph.graph.state import CompiledStateGraph
-
-from src.expense_agent.agent import create_main_agent
-from src.expense_agent.db import ExpenseDBResource, create_database
-from src.expense_agent.logging_config import logger, setup_logging
-from src.expense_agent.memory import (
-    CheckpointerResource,
-    StoreResource,
-)
-from src.expense_agent.services.chat_service import chat_stream
 
 setup_logging()
 
