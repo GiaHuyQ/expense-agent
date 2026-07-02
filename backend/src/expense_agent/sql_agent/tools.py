@@ -2,7 +2,7 @@ import aiosqlite
 from typing import Any
 from datetime import datetime
 
-from expense_agent.logging_config import logger
+from src.expense_agent.logging_config import logger
 from langchain.tools import tool
 from langchain_core.runnables import RunnableConfig
 
