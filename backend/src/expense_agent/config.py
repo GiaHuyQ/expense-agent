@@ -1,3 +1,4 @@
+import os
 from pydantic import SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -23,3 +24,9 @@ class Settings(BaseSettings):
     LANGSMITH_PROJECT: str = "expense-agent"
 
 settings = Settings()
+
+if settings.LANGSMITH_TRACING and settings.LANGSMITH_API_KEY:
+    os.environ["LANGSMITH_TRACING"] = "true"
+    os.environ["LANGSMITH_API_KEY"] = settings.LANGSMITH_API_KEY.get_secret_value() 
+    os.environ["LANGCHAIN_PROJECT"] = settings.LANGSMITH_PROJECT
+    os.environ["LANGSMITH_ENDPOINT"] = settings.LANGSMITH_ENDPOINT
