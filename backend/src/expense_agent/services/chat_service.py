@@ -30,7 +30,7 @@ async def chat_stream(
     )
 
     try:
-        async for chunk, _ in agent.astream(
+        async for event in agent.astream(
             {
                 "messages": [
                     HumanMessage(content=message),
@@ -39,8 +39,11 @@ async def chat_stream(
             config=config,
             stream_mode="messages",
         ):  
-            if chunk.content:          # type: ignore[attr-defined]
-                yield chunk.content    # type: ignore[attr-defined]
+            if event["type"] == "messages":
+                chunk, metadata = event["data"]
+                node = metadata.get("langgraph_node")         
+                if node == "model":
+                    yield chunk.content    
             
         logger.info(
             "chat_stream_finished | thread_id=%s",
