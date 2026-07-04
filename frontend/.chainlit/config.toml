@@ -95,7 +95,7 @@ reaction_on_message_received = false
 
 [UI]
 # Name of the assistant.
-name = "Assistant"
+name = "Expense Agent"
 
 # default_theme = "dark"
 
@@ -134,7 +134,7 @@ cot = "full"
 # custom_js = "/public/test.js"
 
 # The style of alert boxes. Can be "classic" or "modern".
-alert_style = "classic"
+alert_style = "modern"
 
 # Specify additional attributes for custom JS file
 # custom_js_attributes = "async type = \"module\""
@@ -156,10 +156,10 @@ alert_style = "classic"
 logo_file_url = ""
 
 # Load assistant avatar image directly from URL.
-default_avatar_file_url = ""
+default_avatar_file_url = "https://cdn-icons-gif.flaticon.com/12134/12134116.gif"
 
-# Avatar size in pixels (default: 20).
-# avatar_size = 20
+# Avatar size in pixels (default: 40).
+# avatar_size = 35
 
 # Specify a custom build directory for the frontend.
 # This can be used to customize the frontend code.
