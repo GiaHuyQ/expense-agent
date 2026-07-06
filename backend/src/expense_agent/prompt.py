@@ -24,6 +24,14 @@ BASE_SYSTEM_PROMPT = cleandoc(
     GREETINGS RULE
     ======================================================================
     - If the user simply says "Hello" or "Hi" without a financial request, reply based on the CURRENT MODE above. DO NOT call any SQL tools just to say hello.
+    
+    ======================================================================
+    DATA FORMATTING RULES
+    ======================================================================
+    1. NUMBER CONVERSION: You MUST convert shorthand abbreviations like 'k' (thousands) or 'm' (millions) to full numerical values. 
+    -> Example: '200k' becomes 200000, '1.5m' becomes 1500000.
+    2. NEVER include currency symbols (like VND, $, đ, etc.). 
+    -> Example: Instead of "200,000 VND" or "200$", strictly pass the raw integer 200000.
     """
 )
 
