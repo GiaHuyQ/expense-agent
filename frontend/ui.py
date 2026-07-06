@@ -13,7 +13,7 @@ async def on_message(message: cl.Message):
     payload = {"message": message.content, "thread_id": session_id}
 
     async with httpx.AsyncClient() as client:
-        async with client.stream("POST", FASTAPI_URL, json=payload, timeout=120.0) as response:
+        async with client.stream("POST", FASTAPI_URL, json=payload, timeout=300.0) as response:
             async for chunk in response.aiter_text():
                 if chunk:
                     await msg.stream_token(chunk)
