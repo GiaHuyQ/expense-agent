@@ -95,7 +95,7 @@ reaction_on_message_received = false
 
 [UI]
 # Name of the assistant.
-name = "Expense Agent"
+name = "Expense Tracker"
 
 # default_theme = "dark"
 
