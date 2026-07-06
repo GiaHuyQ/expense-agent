@@ -27,13 +27,11 @@ summarize_model = ChatOpenAI(
     temperature=0.0,
 )
 
-
 @dataclass(slots=True)
 class AgentResources:
     agent: CompiledStateGraph
     checkpoint: CheckpointerResource
     store: StoreResource
-
 
 async def create_main_agent() -> AgentResources:
     checkpoint_resource  = await create_checkpointer()
@@ -48,12 +46,11 @@ async def create_main_agent() -> AgentResources:
             PIIMiddleware("credit_card", strategy="mask", apply_to_input=True),
             SummarizationMiddleware(
                 model=summarize_model,
-                trigger=[("tokens", 4096), ("messages", 6)],
-                keep=("messages", 10)
+                trigger=[("tokens", 2048), ("messages", 10)],
+                keep=("messages", 5)
             ),
             build_system_prompt
-        ]
-        
+        ]  
     )
 
     return AgentResources(
