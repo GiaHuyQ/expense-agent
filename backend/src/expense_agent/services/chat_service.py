@@ -38,6 +38,7 @@ async def chat_stream(
             },
             config=config,
             stream_mode="messages",
+            version="v2"
         ):  
             if event["type"] == "messages":
                 chunk, metadata = event["data"]
