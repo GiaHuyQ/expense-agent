@@ -62,10 +62,9 @@ def get_db_dictionary() -> dict:
     }
     return data_dictionary
 
-@tool
+@tool(description="Retrive data in enxpense database")
 async def execute_sql(query: str, config: RunnableConfig) -> dict[str, object]:
-    """Execute a read-only SQL query.
-
+    """
     Args:
         query: SQL query.
     """
@@ -101,103 +100,105 @@ async def execute_sql(query: str, config: RunnableConfig) -> dict[str, object]:
         logger.exception("execute_sql_failed | query=%s", query)
         return {"status": "error"}
     
-@tool
-async def add_category(category_name: str, config: RunnableConfig) -> dict[str, object]:
-    """Create a category if it does not exist.
-
+@tool(description="Create one or more expense/income categories if they do not exist.")
+async def add_category(category_names: list[str], config: RunnableConfig) -> dict[str, object]:
+    """
     Args:
-        category_name: Category name.
+        category_names: List of category names to create. Pass all categories
+            the user mentions in a single call instead of calling this tool
+            multiple times.
     """
     db = config.get("configurable", {}).get("db")
 
     if not db:
         logger.error("Database connection missing in config")
         return {"status": "error", "message": "System error: DB not connected."}
+    
+    if not category_names:
+        return {"status": "error", "message": "No category names provided."}
 
-    logger.info("add_category_called | category_name=%s", category_name)
-
+    logger.info("add_category_called | category_name=%s", category_names)
+        
     conn = db.write_conn
 
     try:      
         # Insert or ignore if it already exists due to UNIQUE constraint
-        await conn.execute(
-            "INSERT OR IGNORE INTO category (category_name) VALUES (?);", 
-            (category_name,),
-        )
+        results = []
+
+        for category in category_names:
+            try:
+                await conn.execute(
+                    "INSERT OR IGNORE INTO category (category_name) VALUES (?);",
+                    (category,),
+                )
+                results.append({"category_name": category, "status": "success"})
+
+            except aiosqlite.Error as err:
+                results.append({"category_name": category, "status": "error", "message": str(err)})
 
         await conn.commit()
         
         return {
             "status": "success",
-            "category_name": category_name,
+            "category_name": results,
         }
     
-    except aiosqlite.Error:
+    except Exception as error:
         await conn.rollback()
         logger.exception(
             "add_category_failed | category_name=%s",
-            category_name,
+            category_names, error
         )
 
         return {
             "status": "error",
         }
 
-@tool
+@tool(description="Create one or more money sources (wallets/accounts) if they do not exist.")
 async def add_money_source(
-        config: RunnableConfig,
-        source_name: str, 
-        initial_balance: float = 0.0,
-    ) -> dict[str, str]:
-    """Create a money source if it does not exist.
-
+    config: RunnableConfig,
+    sources: list[tuple[str, float]],
+) -> dict[str, object]:
+    """
     Args:
-        source_name: Money source name.
-        initial_balance: Initial balance.
+        sources: List of (source_name, initial_balance) pairs to create.
+            Pass all money sources the user mentions in a single call
+            instead of calling this tool multiple times. Use 0.0 for
+            initial_balance if the user does not specify a starting amount.
     """
     db = config.get("configurable", {}).get("db")
-
     if not db:
         logger.error("Database connection missing in config")
         return {"status": "error", "message": "System error: DB not connected."}
 
-    logger.info(
-        "add_money_source_called | source_name=%s | initial_balance=%s",
-        source_name,
-        initial_balance,
-    )
+    if not sources:
+        return {"status": "error", "message": "No money sources provided."}
 
+    logger.info("add_money_source_called | sources=%s", sources)
     conn = db.write_conn
 
     try:
-
-        await conn.execute(
-            "INSERT OR IGNORE INTO source (source_name, initial_balance) VALUES (?, ?);", 
-            (source_name, initial_balance)
-        )
+        results = []
+        for source_name, initial_balance in sources:
+            try:
+                await conn.execute(
+                    "INSERT OR IGNORE INTO source (source_name, initial_balance) VALUES (?, ?);",
+                    (source_name, initial_balance),
+                )
+                results.append({"source_name": source_name, "status": "success"})
+            except aiosqlite.Error as err:
+                results.append({"source_name": source_name, "status": "error", "message": str(err)})
 
         await conn.commit()
-
-        logger.info(
-            "add_money_source_success | source_name=%s",
-            source_name,
-        )
-
-        return {
-            "status": "success",
-            "source_name": source_name
-        }
+        return {"status": "success", "results": results}
 
     except aiosqlite.Error:
         await conn.rollback()
-        logger.exception(
-            "add_money_source_failed | source_name=%s",
-            source_name,
-        )
+        logger.exception("add_money_source_failed | sources=%s", sources)
         return {"status": "error"}
 
 
-@tool
+@tool(description="Add a new transaction strictly using pre-validated integer category_id and source_id")
 async def add_transaction(
     config: RunnableConfig,
     transaction_date: str, 
@@ -206,8 +207,7 @@ async def add_transaction(
     category_id: int, 
     source_id: int,
     note: str | None = None) -> dict[str, Any]:
-    """Add a new transaction strictly using pre-validated integer category_id and source_id.
-
+    """
     Args:
         transaction_date: The date string formatted strictly as 'YYYY-MM-DD'.
         amount: The monetary value, must be strictly greater than 0.
@@ -288,7 +288,7 @@ async def add_transaction(
         logger.exception("add_transaction_failed")
         return {"status":"error"}
 
-@tool
+@tool(description="Update specific fields of an existing transaction by its unique ID.")
 async def update_transaction(
     config: RunnableConfig,
     transaction_id: int, 
@@ -298,8 +298,7 @@ async def update_transaction(
     category_id: int | None = None, 
     source_id: int | None = None, 
     note: str | None = None) -> dict[str, Any]:
-    """Update specific fields of an existing transaction by its unique ID.
-
+    """
     Args:
         transaction_id: The integer primary key ID of the transaction to modify.
         transaction_date: Optional new date string formatted as 'YYYY-MM-DD'.
@@ -422,13 +421,12 @@ async def update_transaction(
             "status": "error"
         }
 
-@tool
+@tool(description="Delete an existing transaction permanently from the database by its ID.")
 async def delete_transaction(
     config: RunnableConfig,
     transaction_id: int
 ) -> dict[str, Any]:
-    """Delete an existing transaction permanently from the database by its ID.
-
+    """
     Args:
         transaction_id: The integer primary key ID of the transaction to be removed.
     """
