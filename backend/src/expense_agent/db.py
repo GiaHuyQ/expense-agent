@@ -25,42 +25,33 @@ async def create_database() -> ExpenseDBResource:
 
         # Create database schema
         await w_conn.executescript("""
-            CREATE TABLE IF NOT EXISTS category (
-                category_id INTEGER PRIMARY KEY,
+            CREATE TABLE IF NOT EXISTS categories (
+                category_id INTEGER PRIMARY KEY AUTOINCREMENT,
                 category_name TEXT NOT NULL UNIQUE
             );
 
-            CREATE TABLE IF NOT EXISTS source (
-                source_id INTEGER PRIMARY KEY,
+            CREATE TABLE IF NOT EXISTS sources (
+                source_id INTEGER PRIMARY KEY AUTOINCREMENT,
                 source_name TEXT NOT NULL UNIQUE,
-                initial_balance REAL NOT NULL DEFAULT 0
+                balance INTEGER NOT NULL DEFAULT 0 
+                    CHECK(balance >= 0)
             );
 
             CREATE TABLE IF NOT EXISTS transactions (
-                id INTEGER PRIMARY KEY,
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
                 transaction_date TEXT NOT NULL,
-                amount REAL NOT NULL CHECK (amount > 0),
-                transaction_type TEXT NOT NULL CHECK (transaction_type IN ('expense', 'income')),
-                category_id INTEGER,
-                source_id INTEGER,
+                amount INTEGER NOT NULL 
+                    CHECK(amount > 0),
+                transaction_type TEXT NOT NULL
+                    CHECK(transaction_type IN ('expense', 'income')),
+                category_id INTEGER NOT NULL,
+                source_id INTEGER NOT NULL,
                 note TEXT,
-                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, 
-                                                     
-                CONSTRAINT fk_category FOREIGN KEY (category_id) REFERENCES category(category_id),
-                CONSTRAINT fk_source FOREIGN KEY (source_id) REFERENCES source(source_id)
-            );
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
-            CREATE VIEW IF NOT EXISTS source_balance AS
-            SELECT
-                s.source_id,
-                s.source_name,
-                s.initial_balance
-                + COALESCE(SUM(CASE WHEN t.transaction_type = 'income' THEN t.amount ELSE 0 END), 0)
-                - COALESCE(SUM(CASE WHEN t.transaction_type = 'expense' THEN t.amount ELSE 0 END), 0)
-                    AS current_balance
-            FROM source s
-            LEFT JOIN transactions t ON t.source_id = s.source_id
-            GROUP BY s.source_id;
+                FOREIGN KEY(category_id) REFERENCES categories(category_id),
+                FOREIGN KEY(source_id) REFERENCES sources(source_id)
+            );
         """)
 
         await w_conn.commit()
@@ -84,3 +75,5 @@ async def create_database() -> ExpenseDBResource:
         if w_conn is not None:
             await w_conn.close()
         raise
+
+
