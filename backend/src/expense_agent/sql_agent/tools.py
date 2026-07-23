@@ -18,143 +18,6 @@ def get_db(config: RunnableConfig) -> ExpenseDBResource:
     
     return db
 
-@tool(description="Retrieve the comprehensive database dictionary containing tables, columns, constraints, and usage guidelines.")
-def get_db_dictionary() -> dict:
-    data_dictionary = {
-        "tables": {
-            "categories": {
-                "description": (
-                    "Stores transaction categories "
-                    "(e.g., Food, Salary, Transportation, Cafe). "
-                    "Use this table to classify transactions."
-                ),
-                "columns": {
-                    "category_id": (
-                        "INTEGER PRIMARY KEY AUTOINCREMENT - "
-                        "Unique identifier for each category."
-                    ),
-                    "category_name": (
-                        "TEXT NOT NULL UNIQUE - "
-                        "Unique category name."
-                    ),
-                },
-            },
-
-            "sources": {
-                "description": (
-                    "Stores all financial accounts or wallets "
-                    "(e.g., Cash, Vietcombank, Credit Card, MoMo). "
-                    "The balance column always represents the current available balance."
-                ),
-                "columns": {
-                    "source_id": (
-                        "INTEGER PRIMARY KEY AUTOINCREMENT - "
-                        "Unique identifier for each source."
-                    ),
-                    "source_name": (
-                        "TEXT NOT NULL UNIQUE - "
-                        "Unique source or wallet name."
-                    ),
-                    "balance": (
-                        "INTEGER NOT NULL DEFAULT 0 - "
-                        "Current balance of this source. "
-                        "Do NOT manually calculate balance from transactions."
-                    ),
-                },
-            },
-
-            "transactions": {
-                "description": (
-                    "Stores every income and expense transaction. "
-                    "Each transaction must belong to exactly one category and one source."
-                ),
-                "columns": {
-                    "id": (
-                        "INTEGER PRIMARY KEY AUTOINCREMENT - "
-                        "Unique identifier for each transaction."
-                    ),
-                    "transaction_date": (
-                        "TEXT NOT NULL - "
-                        "Transaction date in STRICT ISO format 'YYYY-MM-DD'. "
-                        "Always use this format for filtering and comparisons."
-                    ),
-                    "amount": (
-                        "INTEGER NOT NULL CHECK(amount > 0) - "
-                        "Transaction amount. Must always be a positive integer."
-                    ),
-                    "transaction_type": (
-                        "TEXT NOT NULL CHECK(transaction_type IN ('expense', 'income')) - "
-                        "Only two allowed values: 'expense' or 'income'."
-                    ),
-                    "category_id": (
-                        "INTEGER NOT NULL - "
-                        "Foreign key referencing categories(category_id)."
-                    ),
-                    "source_id": (
-                        "INTEGER NOT NULL - "
-                        "Foreign key referencing sources(source_id)."
-                    ),
-                    "note": (
-                        "TEXT - "
-                        "Optional transaction description. "
-                        "Use LIKE or LOWER() when performing keyword searches."
-                    ),
-                    "created_at": (
-                        "TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP - "
-                        "Automatically generated creation timestamp."
-                    ),
-                },
-            },
-        },
-        "business_rules": {
-            # ========================
-            # Transaction Semantics
-            # ========================
-            "Each transaction represents exactly one financial event.",
-            "Every transaction MUST belong to exactly one category and one source.",
-            "Amount is ALWAYS a positive INTEGER (> 0). Never use negative values.",
-            "Money flow is determined ONLY by transaction_type:",
-            "  - 'expense' decreases the source balance.",
-            "  - 'income' increases the source balance.",
-
-            # ========================
-            # Balance Rules
-            # ========================
-            "The sources.balance column always stores the CURRENT balance.",
-            "NEVER calculate the current balance by summing transactions unless explicitly requested by the user.",
-            "To calculate the user's total net worth, use: SELECT SUM(balance) FROM sources.",
-
-            # ========================
-            # Join Rules
-            # ========================
-            "Always JOIN transactions.category_id = categories.category_id.",
-            "Always JOIN transactions.source_id = sources.source_id.",
-
-            # ========================
-            # Query Rules
-            # ========================
-            "Use LIKE or LOWER() when searching transaction notes by keyword.",
-            "Always use transaction_date for filtering by date.",
-            "transaction_date must always use ISO format: YYYY-MM-DD.",
-
-            # ========================
-            # Date Handling
-            # ========================
-            "NEVER manually calculate date boundaries in Python or SQL.",
-            "Always use SQLite built-in date() and strftime() functions with the {NOW} anchor.",
-            "This month: strftime('%Y-%m', transaction_date) = strftime('%Y-%m', '{NOW}')",
-            "Last month: strftime('%Y-%m', transaction_date) = strftime('%Y-%m', date('{NOW}', 'start of month', '-1 month'))",
-            "This week (Monday-Sunday): transaction_date BETWEEN date('{NOW}', 'weekday 0', '-6 days') AND date('{NOW}')",
-
-            # ========================
-            # Aggregation
-            # ========================
-            "For month-over-month analysis, prefer a SINGLE GROUP BY query instead of multiple queries.",
-        }
-    }
-
-    return data_dictionary
-
 @tool(description="Retrive data in enxpense database")
 async def execute_sql(query: str, config: RunnableConfig) -> dict[str, object]:
     """
@@ -184,7 +47,9 @@ async def execute_sql(query: str, config: RunnableConfig) -> dict[str, object]:
                 "rows": []
             }
         
-        rows = [dict(row) for row in results]   
+        columns = [col[0] for col in cursor.description]
+
+        rows = [dict(zip(columns, row)) for row in results]  
 
         return {
             "status": "success",
@@ -307,7 +172,7 @@ async def add_transaction(
     transaction_type: str, 
     category_id: int, 
     source_id: int,
-    note: str | None = None) -> dict[str, Any]:
+    note: str) -> dict[str, Any]:
     """
     Args:
         transaction_date: The date string formatted strictly as 'YYYY-MM-DD'.
@@ -382,15 +247,16 @@ async def add_transaction(
         # Check Source
         cursor = await conn_r.execute("SELECT balance FROM sources WHERE source_id = ?", (source_id,))
 
-        if await cursor.fetchone() is None:
+        # Validate Source
+        row = await cursor.fetchone()
+
+        if row is None:
             await conn_w.rollback()
             return {
                 "status": "error",
                 "message": "Source not found"
             }
         
-        # Validate Source
-        row = await cursor.fetchone()
         current_balance = row[0] # type: ignore
         
         # Business Validation

@@ -13,7 +13,6 @@ from .prompt import build_system_prompt
 from src.expense_agent.config import settings
 from src.expense_agent.logging_config import logger
 from src.expense_agent.sql_agent.tools import (
-    get_db_dictionary,
     execute_sql,
     add_transaction,
     update_transaction,
@@ -28,12 +27,13 @@ model = ChatOpenAI(
     model=settings.MODEL_NAME,
     temperature=0.0,
     top_p=0.95,
+    
 )
 
 sql_agent = create_agent(
     model=model,
     middleware=[build_system_prompt], 
-    tools=[get_db_dictionary, execute_sql, add_category, add_money_source, add_transaction, update_transaction, delete_transaction]
+    tools=[execute_sql, add_category, add_money_source, add_transaction, update_transaction, delete_transaction]
 )
 
 @tool
