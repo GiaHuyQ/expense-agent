@@ -19,6 +19,7 @@ from src.expense_agent.sql_agent.tools import (
     delete_transaction,
     add_category,
     add_money_source,
+    transfer_money
 )
 
 model = ChatOpenAI(
@@ -33,7 +34,7 @@ model = ChatOpenAI(
 sql_agent = create_agent(
     model=model,
     middleware=[build_system_prompt], 
-    tools=[execute_sql, add_category, add_money_source, add_transaction, update_transaction, delete_transaction]
+    tools=[execute_sql, add_category, add_money_source, add_transaction, update_transaction, delete_transaction, transfer_money]
 )
 
 @tool
