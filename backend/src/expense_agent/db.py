@@ -30,6 +30,8 @@ async def create_database() -> ExpenseDBResource:
                 category_name TEXT NOT NULL UNIQUE
             );
 
+            INSERT OR IGNORE INTO categories (category_name) VALUES ('Transfer');
+
             CREATE TABLE IF NOT EXISTS sources (
                 source_id INTEGER PRIMARY KEY AUTOINCREMENT,
                 source_name TEXT NOT NULL UNIQUE,
