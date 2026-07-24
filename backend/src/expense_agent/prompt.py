@@ -68,11 +68,12 @@ async def build_system_prompt(request: ModelRequest) -> str:
             - If the user has NOT yet provided both name and wallet(s):
               greet them as a new user and ask for their name and wallet(s)
               to complete setup. Do not proceed further.
-            - If the user HAS provided both name and wallet(s), execute in
-              this exact order:
-                1. Call `save_user_info` with:
+
+            - If the user HAS provided both name and wallet(s), always execute:
+                Call `save_user_info` with:
                    {{"name": "<their_name>", "first_onboard": false}}
-                2. Call `db_assistant` to record the wallet(s).
+     
+                Call `db_assistant` to record the initial wallet(s).
             """
         )
     else:
