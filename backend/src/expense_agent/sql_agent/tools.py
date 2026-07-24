@@ -572,6 +572,7 @@ async def delete_transaction(
 
     try:
         await conn_w.execute("BEGIN IMMEDIATE")
+
         # 1. Get transaction record
         record = await get_old_transaction(conn_w, transaction_id)
         
@@ -606,4 +607,144 @@ async def delete_transaction(
         await conn_w.rollback()
         logger.exception("delete_transaction_failed | transaction_id=%s", transaction_id)
         return {"status": "error"}
+    
+@tool(description="Transfer money cross sources")
+async def transfer_money(fromSource_id: int, toSource_id: int, amount: int, transfer_date: str, config: RunnableConfig):
+    """
+    Args:
+        fromSource_id: The source wallet id, must be integer.
+        toSource_id: The destination wallet id, must be integer.
+        amount: The monetary value, must be strictly greater than 0.
+    """
+    try:
+        db = get_db(config)
+
+    except RuntimeError:
+        return {
+            "status": "error",
+            "message": "System error"
+        }
+
+    if amount <= 0:
+        return {
+            "status": "error",
+            "message": "Invalid amount"
+        }
+
+    if fromSource_id == toSource_id:
+        return {
+            "status": "error",
+            "message": "Source and destination wallets must be different"
+        }
+
+    if transfer_date is not None:
+        try:
+            datetime.strptime(transfer_date, "%Y-%m-%d")
+        except ValueError:
+            return {
+                "status": "error",
+                "message": "Invalid transfer date."
+            }
+
+    conn_w = db.write_conn
+
+    try:
+        logger.info('Start transfer money cross sources | ')
+        # 1. Start transaction
+        await conn_w.execute('BEGIN IMMEDIATE')
+
+        # 2. fromSource validation
+        cursor = await conn_w.execute('SELECT source_name, balance FROM sources WHERE source_id = ?', (fromSource_id,))
+        row = await cursor.fetchone()
+
+        if row:
+            fromSource_name = row[0]
+            fromSource_current_balence = row[1]
+            if fromSource_current_balence < amount:
+                await conn_w.rollback()
+                return {
+                    "status": "error",
+                    "message": "Insufficient fromSource balance"
+                }
+        else:
+            await conn_w.rollback()
+            return {
+                "status": "error",
+                "message": "fromSource_id not found"
+            }
+
+        # 3. toSource validation
+        cursor = await conn_w.execute('SELECT source_name, balance FROM sources WHERE source_id = ?', (toSource_id,))
+        row = await cursor.fetchone()
+
+        if not row:
+            await conn_w.rollback()
+            return {
+                "status": "error",
+                "message": "toSource_id not found"
+            }
+
+        toSource_name = row[0]
+        toSource_current_balance = row[1]
+
+        # 4. Start Transfer
+        await conn_w.execute(
+        '''
+            INSERT INTO transactions (transaction_date, amount, transaction_type, category_id, source_id, note) VALUES
+            (?, ?, ?, ?, ?, ?)
+        ''',
+        (transfer_date, amount, 'expense', 1, fromSource_id, f'transfers {amount} to {toSource_name}',)
+        )
+
+        await conn_w.execute(
+        '''
+            UPDATE sources SET balance = ? WHERE source_id = ?
+        ''',
+        (fromSource_current_balence - amount, fromSource_id,)
+        )
+
+        await conn_w.execute(
+        '''
+            INSERT INTO transactions (transaction_date, amount, transaction_type, category_id, source_id, note) VALUES
+            (?, ?, ?, ?, ?, ?)
+        ''',
+        (transfer_date, amount, 'income', 1, toSource_id, f'received {amount} from {fromSource_name}',)
+        )
+
+        await conn_w.execute(
+        '''
+            UPDATE sources SET balance = ? WHERE source_id = ?
+        ''',
+        (toSource_current_balance + amount, toSource_id,)
+        )
+
+        await conn_w.commit()
+        
+        logger.info(
+            "transfer_money_success | fromSource_id = %s | toSource_id=%s | amount = %s",
+            fromSource_id, toSource_id, amount 
+        )
+
+        return {
+            "status": "success",
+            "message": f"Successfully transferred {amount} from {fromSource_name} to {toSource_name}"
+        }
+        
+    except aiosqlite.Error:
+        await conn_w.rollback()
+        logger.exception(
+            "transfer_money_failed | fromSource_id = %s | toSource_id=%s | amount = %s",
+            fromSource_id, toSource_id, amount 
+        )
+        return {
+            "status": "error",
+            "message": "Transfer money cross sources failed"
+        }
+
+
+    
+    
+
+    
+
     
