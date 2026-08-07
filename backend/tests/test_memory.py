@@ -3,12 +3,10 @@ import shutil
 import sys
 import unittest
 
-# Cho phép import từ thư mục project
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
 from langgraph.store.sqlite.aio import AsyncSqliteStore
-
 from src.expense_agent import memory
 from src.expense_agent.memory import (
     create_checkpointer,
@@ -105,7 +103,6 @@ class TestAgentMemory(unittest.IsolatedAsyncioTestCase):
                 "age": 28,
             },
         )
-
-
+        
 if __name__ == "__main__":
     unittest.main()

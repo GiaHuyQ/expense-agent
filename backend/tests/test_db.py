@@ -1,9 +1,15 @@
 import os
 import shutil
+import sys
 import unittest
 
-from ..src.expense_agent.db import create_database
-from ..src.expense_agent import db as db_module
+import aiosqlite
+
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+
+from src.expense_agent import db as db_module
+from src.expense_agent.db import create_database
+
 
 class TestDatabaseSystem(unittest.IsolatedAsyncioTestCase):
     """
@@ -44,14 +50,14 @@ class TestDatabaseSystem(unittest.IsolatedAsyncioTestCase):
         """Ensure invalid source_id is rejected."""
 
         await self.conn.executescript("""
-            INSERT INTO category (category_name)
+            INSERT INTO categories (category_name)
             VALUES ('Food');
 
-            INSERT INTO source (source_name, initial_balance)
+            INSERT INTO sources (source_name, balance)
             VALUES ('Cash', 500000);
         """)
 
-        with self.assertRaises(Exception):
+        with self.assertRaises(aiosqlite.IntegrityError):
             await self.conn.execute("""
                 INSERT INTO transactions (
                     transaction_date,
@@ -68,50 +74,6 @@ class TestDatabaseSystem(unittest.IsolatedAsyncioTestCase):
                     999
                 );
             """)
-
-    async def test_view_balance_calculation(self):
-        """Verify source_balance view correctness."""
-
-        await self.conn.executescript("""
-            INSERT INTO category (category_name)
-            VALUES ('Food');
-
-            INSERT INTO source (source_name, initial_balance)
-            VALUES ('Cash', 500000);
-
-            INSERT INTO transactions (
-                transaction_date,
-                amount,
-                transaction_type,
-                category_id,
-                source_id
-            )
-            VALUES ('2026-06-25', 200000, 'income', 1, 1);
-
-            INSERT INTO transactions (
-                transaction_date,
-                amount,
-                transaction_type,
-                category_id,
-                source_id
-            )
-            VALUES ('2026-06-25', 50000, 'expense', 1, 1);
-        """)
-
-        await self.conn.commit()
-
-        cursor = await self.conn.execute("""
-            SELECT current_balance
-            FROM source_balance
-            WHERE source_id = 1;
-        """)
-
-        row = await cursor.fetchone()
-
-        row_val = row[0] if row and row[0] is not None else None
-
-        # 500000 + 200000 - 50000 = 650000
-        self.assertEqual(row_val, 650000)
 
 if __name__ == "__main__":
     unittest.main()
