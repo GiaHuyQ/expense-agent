@@ -1,12 +1,11 @@
+import json
 from collections.abc import AsyncGenerator
 
 from langchain.messages import HumanMessage
 from langchain_core.runnables import RunnableConfig
 from langgraph.graph.state import CompiledStateGraph
-
 from src.expense_agent.db import ExpenseDBResource
 from src.expense_agent.logging_config import logger
-
 
 
 async def chat_stream(
@@ -44,7 +43,8 @@ async def chat_stream(
                 chunk, metadata = event["data"]
                 node = metadata.get("langgraph_node")         
                 if node == "model":
-                    yield chunk.content    
+                    payload = json.dumps({"content": chunk.content})
+                    yield f"data: {payload}\n\n"
             
         logger.info(
             "chat_stream_finished | thread_id=%s",
