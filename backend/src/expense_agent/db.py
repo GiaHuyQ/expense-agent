@@ -1,11 +1,16 @@
+import asyncio
 from dataclasses import dataclass
+
 import aiosqlite
+
 from .config import settings
+
 
 @dataclass(slots=True)
 class ExpenseDBResource:
     write_conn: aiosqlite.Connection
     read_conn: aiosqlite.Connection
+    write_lock: asyncio.Lock
 
 async def create_database() -> ExpenseDBResource:
     """Create and initialize the application database."""
@@ -64,10 +69,12 @@ async def create_database() -> ExpenseDBResource:
         )
 
         r_conn.row_factory = aiosqlite.Row
+        write_lock = asyncio.Lock()
 
         return ExpenseDBResource(
             write_conn=w_conn,
-            read_conn=r_conn
+            read_conn=r_conn,
+            write_lock=write_lock
         )
     
     except Exception:
