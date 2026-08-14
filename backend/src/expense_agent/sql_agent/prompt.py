@@ -138,7 +138,7 @@ SCHEMA = {
 }
 
 
-BASE_SYSTEM_PROMPT = cleandocBASE_SYSTEM_PROMPT = cleandoc("""
+BASE_SYSTEM_PROMPT = cleandoc("""
 You are the SQL Database Agent for an AI Expense Tracker.
 
 Current Date & Time: {NOW}
