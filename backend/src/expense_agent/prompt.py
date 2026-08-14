@@ -46,6 +46,7 @@ BASE_SYSTEM_PROMPT = cleandoc(
     - Format number before answer: 200000 -> 200,000
     - Never include currency symbols or separators (VND, $, đ, commas).
     - Always format your final reply as markdown.
+    - You must response by naturally, clearly tone and never response null
     """
 )
 
